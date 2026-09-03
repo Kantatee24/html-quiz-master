@@ -783,7 +783,7 @@ $('btnCI').addEventListener('click', async () => {
    QUIZ
 ══════════════════════════════════════ */
 function renderCategories() {
-  const best = stats?.categoryBest ? JSON.parse(stats.categoryBest) : {};
+  const best = parseJSON(stats?.categoryBest, {});
   $('catGrid').innerHTML = CATS.map(c => {
     const b = best[c.id];
     const pct = b != null ? (b / 10) * 100 : 0;
