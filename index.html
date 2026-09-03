@@ -612,12 +612,18 @@ async function init() {
     $('pfName').textContent = profile.displayName;
     $('ldSub').textContent = 'กำลังโหลดข้อมูลผู้ใช้...';
 
+    $('ldSub').textContent = 'กำลังเชื่อมต่อ API...';
     const res = await api('getUserStats');
     if (res.status === 'ok') {
       stats = res.data;
     } else {
+      $('ldSub').textContent = 'สร้างบัญชีผู้ใช้ใหม่...';
       const cr = await api('createUser');
-      stats = cr.data;
+      if (cr.status === 'ok') {
+        stats = cr.data;
+      } else {
+        throw new Error('API Error: ' + (cr.message || 'ไม่สามารถเชื่อมต่อได้'));
+      }
     }
 
     renderProfile();
@@ -645,16 +651,22 @@ async function api(action, extra = {}) {
     const isGet = ['getUserStats','getLeaderboard','getQuestions'].includes(action);
     if (isGet) {
       const p = new URLSearchParams({ action, userId: profile?.userId || '', ...extra });
-      const r = await fetch(`${API_URL}?${p}`);
-      return r.json();
+      const r = await fetch(`${API_URL}?${p}`, { redirect: 'follow' });
+      const text = await r.text();
+      return JSON.parse(text);
     }
     const r = await fetch(API_URL, {
       method: 'POST',
+      redirect: 'follow',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ action, userId: profile.userId, displayName: profile.displayName, pictureUrl: profile.pictureUrl || '', ...extra })
     });
-    return r.json();
-  } catch (e) { return { status: 'error', message: e.message }; }
+    const text = await r.text();
+    return JSON.parse(text);
+  } catch (e) {
+    console.error('API Error:', e);
+    return { status: 'error', message: e.message };
+  }
 }
 
 /* ══════════════════════════════════════
