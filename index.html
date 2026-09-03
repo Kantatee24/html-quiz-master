@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<!--
+  📚 HTML Quiz Master — LIFF App
+  ================================
+  ✏️ ต้องเติมเอง 2 จุด (ค้นหา "ใส่_"):
+    1. LIFF_ID  → LINE Developers > LINE Login channel > LIFF
+    2. API_URL  → Apps Script > Deploy > Web app (/exec)
+
+  🚀 ลำดับ Deploy:
+    1. รัน seedQuestions() ใน Apps Script ก่อน (เพื่อเติมข้อสอบ)
+    2. Deploy Code.gs เป็น Web App (Execute as: Me / Anyone)
+    3. สร้าง LIFF ใน LINE Login channel (Full / profile+openid / Published)
+       Endpoint URL = URL ที่ host index.html (Vercel)
+    4. เติม LIFF_ID และ API_URL ด้านล่าง
+    5. Push ขึ้น Vercel
+
+  ⚠️ ห้าม host บน GAS โดยตรง เพราะ LIFF login โดนบล็อกใน iframe
+-->
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📚 HTML Quiz Master</title>
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --primary: #7C6FF7;
+  --primary-dark: #5A52D5;
+  --secondary: #4A90E2;
+  --accent: #00D4FF;
+  --success: #00E676;
+  --warning: #FFD700;
+  --danger: #FF5252;
+  --bg: #0f0c29;
+  --bg2: #302b63;
+  --bg3: #1e1b4b;
+  --card: rgba(255,255,255,.07);
+  --card-b: rgba(255,255,255,.12);
+  --txt: #e8e8f8;
+  --txt-s: #9898c0;
+  --r: 18px;
+  --rs: 12px;
+}
+* { font-family: 'IBM Plex Sans Thai', sans-serif; box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: linear-gradient(160deg, var(--bg) 0%, var(--bg2) 55%, var(--bg3) 100%);
+  min-height: 100vh; color: var(--txt); overflow-x: hidden;
+}
+
+/* ─── LOADING ─── */
+#loading {
+  position: fixed; inset: 0;
+  background: linear-gradient(160deg, #0f0c29, #302b63);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 9999; gap: 14px;
+}
+.ld-icon { font-size: 4.5rem; animation: float 2s ease-in-out infinite; }
+.ld-title { font-size: 1.5rem; font-weight: 700; background: linear-gradient(90deg,var(--primary),var(--accent)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.ld-sub { font-size: .82rem; color: var(--txt-s); }
+.ld-bar { width: 200px; height: 4px; background: rgba(255,255,255,.1); border-radius: 99px; overflow: hidden; margin-top: 6px; }
+.ld-fill { height: 100%; background: linear-gradient(90deg,var(--primary),var(--accent)); border-radius: 99px; animation: ldprog 1.6s ease-in-out infinite; }
+@keyframes ldprog { 0%{width:0%} 100%{width:100%} }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+
+/* ─── APP SHELL ─── */
+#app { display: none; max-width: 540px; margin: 0 auto; padding-bottom: 80px; }
+
+/* ─── PROFILE HEADER ─── */
+.pf-header {
+  background: linear-gradient(135deg,rgba(124,111,247,.25),rgba(74,144,226,.2));
+  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid var(--card-b); padding: 14px 16px;
+  position: sticky; top: 0; z-index: 100;
+}
+.pf-top { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.pf-av { position: relative; }
+.pf-av img {
+  width: 54px; height: 54px; border-radius: 50%;
+  border: 2.5px solid var(--primary); object-fit: cover;
+}
+.pf-lv {
+  position: absolute; bottom: -5px; right: -5px;
+  background: linear-gradient(135deg,var(--primary),var(--accent));
+  color: #fff; font-size: .58rem; font-weight: 700;
+  padding: 2px 7px; border-radius: 99px; white-space: nowrap;
+}
+.pf-name { font-weight: 700; font-size: .97rem; line-height: 1.2; }
+.pf-title { font-size: .72rem; color: var(--txt-s); margin-top: 2px; }
+.pf-xp {
+  margin-left: auto; text-align: right;
+  font-size: 1.5rem; font-weight: 800;
+  background: linear-gradient(135deg,var(--primary),var(--accent));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  line-height: 1;
+}
+.pf-xp-lbl { font-size: .62rem; color: var(--txt-s); text-align: right; }
+
+.xp-bar-row { display: flex; justify-content: space-between; font-size: .68rem; color: var(--txt-s); margin-bottom: 4px; }
+.xp-bar { height: 6px; background: rgba(255,255,255,.1); border-radius: 99px; overflow: hidden; margin-bottom: 10px; }
+.xp-fill { height: 100%; background: linear-gradient(90deg,var(--primary),var(--accent)); border-radius: 99px; transition: width .6s ease; }
+
+.stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
+.sc {
+  background: rgba(255,255,255,.06); border: 1px solid var(--card-b);
+  border-radius: 10px; padding: 6px 4px; text-align: center;
+}
+.sc .v { font-size: .95rem; font-weight: 700; line-height: 1.2; }
+.sc .l { font-size: .6rem; color: var(--txt-s); margin-top: 1px; }
+
+/* ─── BOTTOM NAV ─── */
+.bnav {
+  position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 540px;
+  background: rgba(10,8,30,.96); backdrop-filter: blur(20px);
+  border-top: 1px solid var(--card-b);
+  display: flex; z-index: 200;
+}
+.ni {
+  flex: 1; padding: 9px 4px 7px; text-align: center; cursor: pointer;
+  border: none; background: none; color: var(--txt-s); transition: color .2s;
+}
+.ni.active { color: var(--primary); }
+.ni i { font-size: 1.15rem; display: block; margin-bottom: 2px; }
+.ni span { font-size: .58rem; display: block; }
+.ni.active i { animation: navpop .2s ease; }
+@keyframes navpop { 0%{transform:scale(1)} 50%{transform:scale(1.3)} 100%{transform:scale(1)} }
+
+/* ─── TAB PANELS ─── */
+.tp { display: none; padding: 14px 14px 0; animation: fadeUp .28s ease; }
+.tp.active { display: block; }
+@keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+/* ─── GLASS CARD ─── */
+.gc {
+  background: var(--card); border: 1px solid var(--card-b);
+  border-radius: var(--r); backdrop-filter: blur(12px);
+  padding: 16px; margin-bottom: 12px;
+}
+.sec-title {
+  font-weight: 700; font-size: .88rem; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 7px; color: var(--txt);
+}
+.sec-title::before {
+  content: ''; display: inline-block; width: 3px; height: 15px;
+  background: linear-gradient(180deg,var(--primary),var(--accent)); border-radius: 2px;
+}
+
+/* ─── DASHBOARD ─── */
+.mission-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,.06); font-size: .83rem;
+}
+.mission-item:last-child { border-bottom: none; }
+.mi-icon {
+  width: 34px; height: 34px; border-radius: 9px; display: flex;
+  align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0;
+}
+.mi-done .mi-icon { background: rgba(0,230,118,.15); }
+.mi-todo .mi-icon { background: rgba(255,255,255,.07); }
+.mi-name { flex: 1; }
+.mi-xp { font-size: .7rem; color: var(--warning); font-weight: 700; }
+.mi-done .mi-name { text-decoration: line-through; color: var(--txt-s); }
+
+.act-item {
+  display: flex; gap: 10px; padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,.05); font-size: .8rem;
+}
+.act-item:last-child { border-bottom: none; }
+.act-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--primary); margin-top: 6px; flex-shrink: 0;
+}
+
+/* ─── CHECK-IN ─── */
+.ci-hero { text-align: center; padding: 18px 10px 14px; }
+.ci-icon { font-size: 5rem; animation: float 2s ease-in-out infinite; margin-bottom: 8px; }
+.ci-title { font-size: 1.15rem; font-weight: 800; }
+.ci-sub { font-size: .8rem; color: var(--txt-s); margin-top: 4px; }
+.streak-row { display: grid; grid-template-columns: repeat(7,1fr); gap: 5px; margin: 14px 0 16px; }
+.sd {
+  aspect-ratio: 1; border-radius: 8px; border: 1.5px solid var(--card-b);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-size: .52rem; color: var(--txt-s); gap: 1px;
+}
+.sd.done { border-color: var(--warning); background: rgba(255,215,0,.1); color: var(--warning); }
+.sd.today { border-color: var(--primary); background: rgba(124,111,247,.1); }
+.sd .sdi { font-size: .9rem; }
+.ci-nums { display: flex; justify-content: center; gap: 32px; margin-bottom: 16px; }
+.ci-num .v { font-size: 1.8rem; font-weight: 800; line-height: 1; }
+.ci-num .l { font-size: .68rem; color: var(--txt-s); margin-top: 2px; }
+.ci-num.orange .v { color: var(--warning); }
+.ci-num.cyan .v { color: var(--accent); }
+.btn-ci {
+  background: linear-gradient(135deg,var(--warning),#FF9800);
+  border: none; color: #1a1a2e; border-radius: 16px; padding: 14px;
+  width: 100%; font-weight: 800; font-size: 1rem;
+  box-shadow: 0 4px 20px rgba(255,215,0,.25); transition: opacity .2s;
+}
+.btn-ci:disabled { opacity: .5; cursor: default; }
+.ci-status { text-align: center; font-size: .75rem; color: var(--txt-s); margin-top: 8px; }
+
+.reward-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; font-size: .75rem; text-align: center; }
+.rw-card { border-radius: 10px; padding: 10px 6px; border: 1px solid; }
+.rw-em { font-size: 1.4rem; margin-bottom: 4px; }
+
+/* ─── QUIZ ─── */
+.cat-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; }
+.cat-card {
+  background: var(--card); border: 1px solid var(--card-b);
+  border-radius: var(--r); padding: 18px 10px 14px; text-align: center;
+  cursor: pointer; transition: all .2s; position: relative; overflow: hidden;
+}
+.cat-card:hover { transform: translateY(-3px); border-color: var(--primary); }
+.cat-card:active { transform: scale(.97); }
+.cat-card .ce { font-size: 2.2rem; display: block; margin-bottom: 6px; }
+.cat-card .cn { font-size: .82rem; font-weight: 700; }
+.cat-card .cs { font-size: .68rem; color: var(--txt-s); margin-top: 2px; }
+.cat-card .cb { font-size: .68rem; color: var(--success); margin-top: 5px; font-weight: 600; }
+.cat-done-bar {
+  position: absolute; bottom: 0; left: 0; height: 3px;
+  background: linear-gradient(90deg,var(--primary),var(--accent));
+}
+
+#quizScreen, #quizResults { display: none; }
+.qz-hd { margin-bottom: 14px; }
+.qz-top { display: flex; justify-content: space-between; align-items: center; font-size: .8rem; margin-bottom: 6px; }
+.qz-timer {
+  background: rgba(255,82,82,.15); color: #FF6B6B;
+  border-radius: 99px; padding: 3px 12px; font-weight: 700; font-size: .78rem;
+}
+.qz-timer.warn { animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.55} }
+.qz-bar { height: 5px; background: rgba(255,255,255,.1); border-radius: 99px; overflow: hidden; }
+.qz-fill { height: 100%; background: linear-gradient(90deg,var(--primary),var(--accent)); border-radius: 99px; transition: width .3s; }
+
+.q-card {
+  background: rgba(124,111,247,.1); border: 1px solid rgba(124,111,247,.3);
+  border-radius: var(--r); padding: 16px; margin-bottom: 12px;
+}
+.q-num { font-size: .7rem; color: var(--primary); font-weight: 700; margin-bottom: 5px; letter-spacing: .5px; }
+.q-text { font-size: .93rem; font-weight: 500; line-height: 1.55; }
+
+.opt-btn {
+  width: 100%; background: rgba(255,255,255,.04); border: 1.5px solid var(--card-b);
+  border-radius: var(--rs); padding: 11px 13px; margin-bottom: 8px;
+  color: var(--txt); text-align: left; cursor: pointer;
+  transition: all .15s; font-size: .87rem;
+  display: flex; align-items: center; gap: 10px;
+}
+.opt-letter {
+  width: 27px; height: 27px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(255,255,255,.1); display: flex; align-items: center; justify-content: center;
+  font-size: .74rem; font-weight: 700;
+}
+.opt-btn:hover:not(:disabled) { border-color: var(--primary); background: rgba(124,111,247,.1); }
+.opt-btn.correct { border-color: var(--success); background: rgba(0,230,118,.1); }
+.opt-btn.correct .opt-letter { background: var(--success); color: #000; }
+.opt-btn.wrong { border-color: var(--danger); background: rgba(255,82,82,.1); }
+.opt-btn.wrong .opt-letter { background: var(--danger); color: #fff; }
+.opt-btn:disabled { cursor: default; }
+
+.explain-box {
+  background: rgba(0,212,255,.07); border: 1px solid rgba(0,212,255,.2);
+  border-radius: var(--rs); padding: 12px 14px; margin-top: 8px;
+  font-size: .81rem; line-height: 1.6; display: none;
+}
+.btn-next {
+  width: 100%; background: linear-gradient(135deg,var(--primary),var(--secondary));
+  color: #fff; border: none; border-radius: 14px; padding: 13px;
+  font-weight: 700; font-size: .93rem; display: none; margin-top: 6px;
+}
+
+/* ─── RESULTS ─── */
+.res-hero { text-align: center; padding: 20px 0 14px; }
+.score-ring {
+  width: 128px; height: 128px; border-radius: 50%;
+  background: conic-gradient(var(--primary) calc(var(--pct,0) * 1%), rgba(255,255,255,.08) 0%);
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 12px;
+}
+.score-inner {
+  width: 96px; height: 96px; border-radius: 50%;
+  background: var(--bg3); display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+}
+.score-n { font-size: 2rem; font-weight: 800; line-height: 1; }
+.score-d { font-size: .75rem; color: var(--txt-s); }
+.res-grade { font-size: 1.1rem; font-weight: 700; margin-bottom: 6px; }
+.res-xp-tag {
+  display: inline-block; background: rgba(255,215,0,.15); color: var(--warning);
+  border-radius: 99px; padding: 4px 14px; font-size: .78rem; font-weight: 700;
+}
+.btn-review {
+  width: 100%; background: rgba(124,111,247,.15); border: 1px solid var(--primary);
+  color: var(--primary); border-radius: 12px; padding: 10px;
+  font-weight: 700; font-size: .88rem; margin-bottom: 8px; cursor: pointer;
+}
+.btn-retry-q {
+  width: 100%; background: linear-gradient(135deg,var(--primary),var(--secondary));
+  border: none; color: #fff; border-radius: 12px; padding: 10px;
+  font-weight: 700; font-size: .88rem; cursor: pointer;
+}
+.btn-back-cat {
+  width: 100%; background: rgba(255,255,255,.07); border: 1px solid var(--card-b);
+  color: var(--txt-s); border-radius: 12px; padding: 10px;
+  font-size: .88rem; margin-top: 10px; cursor: pointer;
+}
+.rv-card {
+  background: var(--card); border: 1px solid var(--card-b); border-radius: var(--rs);
+  padding: 13px; margin-bottom: 8px; font-size: .81rem; line-height: 1.5;
+}
+
+/* ─── BADGES ─── */
+.badge-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 9px; }
+.bdg {
+  background: var(--card); border: 1px solid var(--card-b);
+  border-radius: var(--rs); padding: 13px 6px; text-align: center;
+  transition: transform .2s;
+}
+.bdg.earned { border-color: rgba(255,215,0,.5); background: rgba(255,215,0,.05); }
+.bdg.locked { opacity: .38; filter: grayscale(.8); }
+.bdg.earned:hover { transform: scale(1.04); }
+.bdg .be { font-size: 2rem; display: block; margin-bottom: 5px; }
+.bdg .bn { font-size: .7rem; font-weight: 700; }
+.bdg .bd { font-size: .6rem; color: var(--txt-s); margin-top: 2px; }
+.bdg.earned .bn { color: var(--warning); }
+
+/* ─── LEADERBOARD ─── */
+.rank-item {
+  display: flex; align-items: center; gap: 11px;
+  background: var(--card); border: 1px solid var(--card-b);
+  border-radius: var(--rs); padding: 10px 13px; margin-bottom: 7px;
+  transition: border-color .2s;
+}
+.rank-item.me { border-color: var(--primary); background: rgba(124,111,247,.1); }
+.rn { width: 26px; text-align: center; font-weight: 800; font-size: .88rem; color: var(--txt-s); flex-shrink: 0; }
+.rn.g { color: #FFD700; font-size: 1.1rem; }
+.rn.s { color: #C0C0C0; }
+.rn.b { color: #CD7F32; }
+.rav img { width: 36px; height: 36px; border-radius: 50%; }
+.ri { flex: 1; overflow: hidden; }
+.ri-name { font-size: .84rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ri-sub { font-size: .68rem; color: var(--txt-s); }
+.rs { font-weight: 800; color: var(--primary); font-size: .9rem; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading">
+  <div class="ld-icon">📚</div>
+  <div class="ld-title">HTML Quiz Master</div>
+  <div class="ld-sub">กำลังเชื่อมต่อ LINE... ✨</div>
+  <div class="ld-bar"><div class="ld-fill"></div></div>
+</div>
+
+<!-- APP -->
+<div id="app">
+
+  <!-- Profile Header -->
+  <div class="pf-header">
+    <div class="pf-top">
+      <div class="pf-av">
+        <img id="pfPic" src="https://placehold.co/54x54/7C6FF7/fff?text=?" alt="avatar">
+        <div class="pf-lv" id="pfLv">Lv 1</div>
+      </div>
+      <div>
+        <div class="pf-name" id="pfName">-</div>
+        <div class="pf-title" id="pfTitle">🥚 มือใหม่</div>
+      </div>
+      <div>
+        <div class="pf-xp" id="pfXP">0</div>
+        <div class="pf-xp-lbl">XP</div>
+      </div>
+    </div>
+    <div class="xp-bar-row">
+      <span id="xpCur">0 XP</span>
+      <span id="xpNxt">100 XP → Lv 2</span>
+    </div>
+    <div class="xp-bar"><div class="xp-fill" id="xpFill" style="width:0%"></div></div>
+    <div class="stats-row">
+      <div class="sc"><div class="v" id="stLesson">0</div><div class="l">บทเรียน</div></div>
+      <div class="sc"><div class="v" id="stMission">0</div><div class="l">ภารกิจ</div></div>
+      <div class="sc"><div class="v" id="stBadge">0</div><div class="l">Badge</div></div>
+      <div class="sc"><div class="v" id="stRank">#-</div><div class="l">อันดับ</div></div>
+    </div>
+  </div>
+
+  <!-- ── TAB: HOME ── -->
+  <div class="tp active" id="tp-home">
+    <div class="sec-title">ภารกิจประจำวัน</div>
+    <div class="gc" id="missionBox">
+      <div class="mission-item mi-todo"><div class="mi-icon">📅</div><div class="mi-name">เช็คอินประจำวัน</div><div class="mi-xp">+10 XP</div></div>
+      <div class="mission-item mi-todo"><div class="mi-icon">📝</div><div class="mi-name">ทำ Quiz 1 หมวด</div><div class="mi-xp">+50 XP</div></div>
+      <div class="mission-item mi-todo"><div class="mi-icon">🏆</div><div class="mi-name">ทำคะแนนเกิน 7/10</div><div class="mi-xp">+20 XP</div></div>
+    </div>
+
+    <div class="sec-title">สถิติการเรียน</div>
+    <div class="gc"><canvas id="radarChart" height="170"></canvas></div>
+
+    <div class="sec-title">กิจกรรมล่าสุด</div>
+    <div class="gc" id="actBox">
+      <div style="text-align:center;color:var(--txt-s);font-size:.8rem;padding:12px 0">ยังไม่มีกิจกรรม — เริ่มเลย! 🚀</div>
+    </div>
+  </div>
+
+  <!-- ── TAB: CHECK-IN ── -->
+  <div class="tp" id="tp-checkin">
+    <div class="gc">
+      <div class="ci-hero">
+        <div class="ci-icon" id="ciIcon">📅</div>
+        <div class="ci-title" id="ciTitle">เช็คอินประจำวัน</div>
+        <div class="ci-sub" id="ciSub">รับ XP ทุกวัน สร้าง Streak!</div>
+      </div>
+      <div class="streak-row" id="streakRow"></div>
+      <div class="ci-nums">
+        <div class="ci-num orange text-center"><div class="v" id="ciStreak">0</div><div class="l">วันติดต่อกัน 🔥</div></div>
+        <div class="ci-num cyan text-center"><div class="v" id="ciXP">+10 XP</div><div class="l">รางวัลวันนี้</div></div>
+      </div>
+      <button class="btn-ci" id="btnCI"><i class="fa-solid fa-calendar-check me-2"></i>เช็คอินเลย!</button>
+      <div class="ci-status" id="ciStatus">ยังไม่ได้เช็คอินวันนี้</div>
+    </div>
+
+    <div class="gc">
+      <div class="sec-title" style="margin-bottom:12px">🎁 รางวัล Streak สะสม</div>
+      <div class="reward-grid">
+        <div class="rw-card" style="background:rgba(255,215,0,.08);border-color:rgba(255,215,0,.25)">
+          <div class="rw-em">🔥</div><b>3 วัน</b><br><span style="color:var(--warning)">Badge ไฟลุก</span>
+        </div>
+        <div class="rw-card" style="background:rgba(0,212,255,.08);border-color:rgba(0,212,255,.25)">
+          <div class="rw-em">⚡</div><b>7 วัน</b><br><span style="color:var(--accent)">Badge ฟ้าผ่า</span>
+        </div>
+        <div class="rw-card" style="background:rgba(124,111,247,.08);border-color:rgba(124,111,247,.25)">
+          <div class="rw-em">👑</div><b>30 วัน</b><br><span style="color:var(--primary)">Badge ราชา</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TAB: QUIZ ── -->
+  <div class="tp" id="tp-quiz">
+    <!-- Category Selection -->
+    <div id="qzCats">
+      <div class="sec-title">เลือกหมวด Quiz HTML</div>
+      <div class="cat-grid" id="catGrid"></div>
+    </div>
+
+    <!-- Quiz Screen -->
+    <div id="quizScreen">
+      <div class="qz-hd">
+        <div class="qz-top">
+          <span id="qProg" style="font-weight:700">ข้อ 1 / 10</span>
+          <div class="qz-timer" id="qTimer">⏱ 30s</div>
+        </div>
+        <div class="qz-bar"><div class="qz-fill" id="qFill" style="width:10%"></div></div>
+      </div>
+      <div class="q-card">
+        <div class="q-num" id="qNum">ข้อที่ 1</div>
+        <div class="q-text" id="qText">-</div>
+      </div>
+      <div id="optList"></div>
+      <div class="explain-box" id="exBox"></div>
+      <button class="btn-next" id="btnNext">ถัดไป →</button>
+    </div>
+
+    <!-- Results -->
+    <div id="quizResults">
+      <div class="gc">
+        <div class="res-hero">
+          <div class="score-ring" id="scoreRing">
+            <div class="score-inner">
+              <div class="score-n" id="resN">0</div>
+              <div class="score-d" id="resD">/10</div>
+            </div>
+          </div>
+          <div class="res-grade" id="resGrade">-</div>
+          <div class="res-xp-tag" id="resXP">+0 XP</div>
+          <div id="resBadge" style="margin-top:10px"></div>
+        </div>
+        <button class="btn-review" id="btnReview">📋 ดูเฉลยทุกข้อ</button>
+        <button class="btn-retry-q" id="btnRetry">🔄 ทำอีกครั้ง</button>
+      </div>
+      <div id="reviewList"></div>
+      <button class="btn-back-cat" id="btnBackCat">← กลับเลือกหมวด</button>
+    </div>
+  </div>
+
+  <!-- ── TAB: BADGES ── -->
+  <div class="tp" id="tp-badges">
+    <div class="gc">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div class="sec-title" style="margin:0">Badge ที่สะสมได้</div>
+        <div style="font-size:.75rem;color:var(--txt-s)"><span id="bdgEarned">0</span>/<span id="bdgTotal">0</span> ชิ้น</div>
+      </div>
+      <div class="badge-grid" id="badgeGrid"></div>
+    </div>
+  </div>
+
+  <!-- ── TAB: RANK ── -->
+  <div class="tp" id="tp-rank">
+    <div class="gc">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div class="sec-title" style="margin:0">อันดับสูงสุด</div>
+        <button onclick="loadLeaderboard()" style="background:none;border:1px solid var(--card-b);color:var(--txt-s);border-radius:99px;padding:4px 12px;font-size:.72rem;cursor:pointer">
+          <i class="fa-solid fa-rotate-right"></i> รีเฟรช
+        </button>
+      </div>
+      <div id="rankList">
+        <div style="text-align:center;color:var(--txt-s);font-size:.82rem;padding:16px">กำลังโหลด...</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- Bottom Nav -->
+<nav class="bnav">
+  <button class="ni active" onclick="goTab('home',this)"><i class="fa-solid fa-house"></i><span>หน้าหลัก</span></button>
+  <button class="ni" onclick="goTab('checkin',this)"><i class="fa-solid fa-calendar-check"></i><span>เช็คอิน</span></button>
+  <button class="ni" onclick="goTab('quiz',this)"><i class="fa-solid fa-brain"></i><span>Quiz</span></button>
+  <button class="ni" onclick="goTab('badges',this)"><i class="fa-solid fa-medal"></i><span>Badge</span></button>
+  <button class="ni" onclick="goTab('rank',this)"><i class="fa-solid fa-ranking-star"></i><span>อันดับ</span></button>
+</nav>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+<script>
+/* ══════════════════════════════════════
+   CONFIG — เติม 2 จุดนี้
+══════════════════════════════════════ */
+const LIFF_ID = '2011299671-nCCRCDig';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwsJpfKmZFsrqYkM3wmUDWk2U9WKJO22v0oa4gUgMBqqgAPZnqqrPgxP58OZcYKfwrvCQ/exec';
+
+/* ══════════════════════════════════════
+   CONSTANTS
+══════════════════════════════════════ */
+const LEVELS = [
+  { min:0,    max:99,   name:'🥚 มือใหม่',      lbl:'Lv 1' },
+  { min:100,  max:249,  name:'🌱 ผู้เรียน',     lbl:'Lv 2' },
+  { min:250,  max:499,  name:'📘 นักเรียน',     lbl:'Lv 3' },
+  { min:500,  max:999,  name:'⚡ ผู้เชี่ยวชาญ',  lbl:'Lv 4' },
+  { min:1000, max:1999, name:'🔥 ปรมาจารย์',    lbl:'Lv 5' },
+  { min:2000, max:Infinity, name:'👑 ตำนาน',    lbl:'Lv 6' },
+];
+
+const BADGE_DEFS = [
+  { id:'first_login',  em:'🌟', name:'ก้าวแรก',       desc:'Login ครั้งแรก' },
+  { id:'checkin_3',    em:'🔥', name:'ไฟลุก',          desc:'Streak 3 วันติดกัน' },
+  { id:'checkin_7',    em:'⚡', name:'ฟ้าผ่า',         desc:'Streak 7 วันติดกัน' },
+  { id:'checkin_30',   em:'👑', name:'ราชา Streak',    desc:'Streak 30 วันติดกัน' },
+  { id:'quiz_perfect', em:'🏆', name:'Perfect!',       desc:'ได้ 10/10 ใน Quiz' },
+  { id:'quiz_master',  em:'🎓', name:'Quiz Master',    desc:'ผ่าน Quiz ทุกหมวด' },
+  { id:'xp_100',       em:'💎', name:'นักสะสม XP',    desc:'สะสม 100 XP' },
+  { id:'xp_500',       em:'🚀', name:'เทพ XP',         desc:'สะสม 500 XP' },
+  { id:'rank_top3',    em:'🥇', name:'Top 3',          desc:'อยู่ใน Top 3' },
+];
+
+const CATS = [
+  { id:'html_basic',    em:'🏗️', name:'HTML พื้นฐาน',   sub:'Tags & Structure' },
+  { id:'html_semantic', em:'🧩', name:'Semantic HTML',  sub:'HTML5 Elements' },
+  { id:'html_forms',    em:'📝', name:'Forms & Input',  sub:'User Input' },
+  { id:'html_tables',   em:'📊', name:'Tables & Lists', sub:'Data Display' },
+  { id:'html_media',    em:'🖼️', name:'Links & Media',  sub:'Images & Video' },
+  { id:'html_css',      em:'🎨', name:'HTML + CSS',     sub:'Styling Basics' },
+];
+
+/* ══════════════════════════════════════
+   STATE
+══════════════════════════════════════ */
+let profile = null, stats = null, radarChart = null;
+let qz = { cat:'', qs:[], cur:0, ans:[], score:0, tmr:null };
+
+/* ══════════════════════════════════════
+   INIT
+══════════════════════════════════════ */
+async function init() {
+  try {
+    await liff.init({ liffId: LIFF_ID });
+    if (!liff.isLoggedIn()) { liff.login(); return; }
+    profile = await liff.getProfile();
+    $('pfPic').src = profile.pictureUrl || '';
+    $('pfName').textContent = profile.displayName;
+
+    const res = await api('getUserStats');
+    if (res.status === 'ok') {
+      stats = res.data;
+    } else {
+      const cr = await api('createUser');
+      stats = cr.data;
+    }
+
+    renderProfile();
+    renderCategories();
+    renderBadgeGrid();
+    renderStreakRow();
+    renderMissions();
+    loadLeaderboard();
+    renderRadar();
+
+    $('loading').style.display = 'none';
+    $('app').style.display = 'block';
+  } catch (e) {
+    $('loading').innerHTML = `<div class="ld-icon">😿</div><div class="ld-title" style="-webkit-text-fill-color:#FF5252">เชื่อมต่อไม่ได้</div><div class="ld-sub">${e.message}</div>`;
+  }
+}
+
+window.addEventListener('pagehide', () => { try { if (liff.isLoggedIn()) liff.logout(); } catch(e){} });
+
+/* ══════════════════════════════════════
+   API
+══════════════════════════════════════ */
+async function api(action, extra = {}) {
+  try {
+    const isGet = ['getUserStats','getLeaderboard','getQuestions'].includes(action);
+    if (isGet) {
+      const p = new URLSearchParams({ action, userId: profile?.userId || '', ...extra });
+      const r = await fetch(`${API_URL}?${p}`);
+      return r.json();
+    }
+    const r = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action, userId: profile.userId, displayName: profile.displayName, pictureUrl: profile.pictureUrl || '', ...extra })
+    });
+    return r.json();
+  } catch (e) { return { status: 'error', message: e.message }; }
+}
+
+/* ══════════════════════════════════════
+   PROFILE UI
+══════════════════════════════════════ */
+function renderProfile() {
+  if (!stats) return;
+  const xp = +stats.totalScore || 0;
+  const lv = getLevel(xp);
+  const nxt = LEVELS.find(l => l.min > xp);
+
+  $('pfXP').textContent = xp.toLocaleString();
+  $('pfLv').textContent = lv.lbl;
+  $('pfTitle').textContent = lv.name;
+  $('stLesson').textContent = stats.quizzesDone || 0;
+  $('stMission').textContent = stats.missionsDone || 0;
+  $('stBadge').textContent = stats.badgeCount || 0;
+  $('stRank').textContent = '#' + (stats.rank || '-');
+
+  const pct = nxt ? Math.min(100, ((xp - lv.min) / (nxt.min - lv.min)) * 100) : 100;
+  $('xpFill').style.width = pct + '%';
+  $('xpCur').textContent = xp + ' XP';
+  $('xpNxt').textContent = nxt ? `${nxt.min} XP → ${nxt.lbl}` : '👑 Max Level!';
+
+  // checkin state
+  const done = isToday(stats.lastCheckin);
+  const streak = +stats.checkinStreak || 0;
+  const bonus = streak >= 30 ? 30 : streak >= 7 ? 20 : streak >= 3 ? 15 : 10;
+  $('ciStreak').textContent = streak;
+  $('ciXP').textContent = '+' + bonus + ' XP';
+  const btn = $('btnCI');
+  if (done) {
+    btn.disabled = true;
+    btn.innerHTML = '✅ เช็คอินแล้ววันนี้!';
+    $('ciStatus').textContent = 'มาอีกพรุ่งนี้นะ 💪';
+    $('ciIcon').textContent = '✅';
+  } else {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-calendar-check me-2"></i>เช็คอินเลย!';
+    $('ciStatus').textContent = 'ยังไม่ได้เช็คอินวันนี้';
+    $('ciIcon').textContent = '📅';
+  }
+
+  renderRadar();
+  renderMissions();
+}
+
+function getLevel(xp) { return [...LEVELS].reverse().find(l => xp >= l.min) || LEVELS[0]; }
+function isToday(s) {
+  if (!s) return false;
+  const d = new Date(s), t = new Date();
+  return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate();
+}
+
+/* ══════════════════════════════════════
+   MISSIONS
+══════════════════════════════════════ */
+function renderMissions() {
+  const done = isToday(stats?.lastCheckin);
+  const qDone = (stats?.todayQuiz || 0) > 0;
+  const highDone = (stats?.todayBest || 0) >= 7;
+  const items = [
+    { done, icon:'📅', name:'เช็คอินประจำวัน', xp:'+10 XP' },
+    { done: qDone, icon:'📝', name:'ทำ Quiz 1 หมวด', xp:'+50 XP' },
+    { done: highDone, icon:'🏆', name:'ทำคะแนนเกิน 7/10', xp:'+20 XP' },
+  ];
+  $('missionBox').innerHTML = items.map(m => `
+    <div class="mission-item ${m.done ? 'mi-done' : 'mi-todo'}">
+      <div class="mi-icon">${m.icon}</div>
+      <div class="mi-name">${m.done ? '✅ ' : ''}${m.name}</div>
+      <div class="mi-xp">${m.xp}</div>
+    </div>`).join('');
+}
+
+/* ══════════════════════════════════════
+   CHECK-IN
+══════════════════════════════════════ */
+function renderStreakRow() {
+  const days = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+  const today = new Date(), streak = +stats?.checkinStreak || 0;
+  let html = '';
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today); d.setDate(today.getDate() - i);
+    const isT = i === 0;
+    const done = i < streak || (i === 0 && isToday(stats?.lastCheckin));
+    html += `<div class="sd ${done ? 'done' : ''} ${isT && !done ? 'today' : ''}">
+      <div>${days[d.getDay()]}</div><div class="sdi">${done ? '🔥' : isT ? '📅' : '·'}</div>
+    </div>`;
+  }
+  $('streakRow').innerHTML = html;
+}
+
+$('btnCI').addEventListener('click', async () => {
+  const btn = $('btnCI');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>กำลังเช็คอิน...';
+  const res = await api('checkIn');
+  if (res.status === 'ok') {
+    stats = res.data;
+    renderProfile();
+    renderStreakRow();
+    Swal.fire({
+      html: `<div style="font-size:2.8rem">🎉</div><div style="font-size:1.1rem;font-weight:800;margin:6px 0">เช็คอินสำเร็จ!</div>
+        <div style="color:#9898c0;font-size:.85rem">Streak: <b style="color:#FFD700">${res.streak} วัน 🔥</b></div>
+        <div style="margin:10px 0"><span style="background:rgba(255,215,0,.2);color:#FFD700;border-radius:99px;padding:5px 16px;font-weight:800">+${res.xpEarned} XP</span></div>
+        ${res.newBadge ? `<div style="font-size:.82rem;color:#e8e8f8;margin-top:6px">🏅 ได้ Badge: <b>${res.newBadge}</b></div>` : ''}`,
+      background: '#1a1a2e', color: '#e8e8f8', confirmButtonColor: '#7C6FF7', confirmButtonText: 'เยี่ยม!'
+    });
+  } else {
+    Swal.fire({ icon: 'info', title: res.message || 'เช็คอินแล้วในวันนี้ 🌟', background: '#1a1a2e', color: '#e8e8f8', confirmButtonColor: '#7C6FF7' });
+  }
+});
+
+/* ══════════════════════════════════════
+   QUIZ
+══════════════════════════════════════ */
+function renderCategories() {
+  const best = stats?.categoryBest ? JSON.parse(stats.categoryBest) : {};
+  $('catGrid').innerHTML = CATS.map(c => {
+    const b = best[c.id];
+    const pct = b != null ? (b / 10) * 100 : 0;
+    return `<div class="cat-card" onclick="startQuiz('${c.id}')">
+      <span class="ce">${c.em}</span>
+      <div class="cn">${c.name}</div>
+      <div class="cs">${c.sub}</div>
+      <div class="cb">${b != null ? `✅ Best ${b}/10` : 'ยังไม่ได้ทำ'}</div>
+      ${b != null ? `<div class="cat-done-bar" style="width:${pct}%"></div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function startQuiz(catId) {
+  Swal.fire({ html:'<div style="font-size:2rem">📥</div><div style="color:#e8e8f8;margin-top:6px">กำลังโหลด Quiz...</div>', background:'#1a1a2e', showConfirmButton:false, allowOutsideClick:false });
+  const res = await api('getQuestions', { category: catId });
+  Swal.close();
+  if (res.status !== 'ok' || !res.data?.length) {
+    return Swal.fire({ icon:'warning', title:'ไม่พบข้อสอบ', text:'กรุณา run seedQuestions() ใน Apps Script ก่อน', background:'#1a1a2e', color:'#e8e8f8', confirmButtonColor:'#7C6FF7' });
+  }
+  qz = { cat: catId, qs: shuffle(res.data).slice(0,10), cur:0, ans:[], score:0, tmr:null };
+  $('qzCats').style.display = 'none';
+  $('quizScreen').style.display = 'block';
+  $('quizResults').style.display = 'none';
+  showQ(0);
+}
+
+function showQ(i) {
+  clearInterval(qz.tmr);
+  const q = qz.qs[i], total = qz.qs.length;
+  $('qProg').textContent = `ข้อ ${i+1} / ${total}`;
+  $('qNum').textContent = `ข้อที่ ${i+1}`;
+  $('qText').textContent = q.question;
+  $('qFill').style.width = `${((i+1)/total)*100}%`;
+  $('exBox').style.display = 'none';
+  $('btnNext').style.display = 'none';
+  $('optList').innerHTML = ['A','B','C','D'].map(o =>
+    `<button class="opt-btn" onclick="pick('${o}')" id="o${o}">
+      <div class="opt-letter">${o}</div><span>${q['opt'+o]}</span>
+    </button>`).join('');
+  startTimer(30);
+}
+
+function startTimer(sec) {
+  let s = sec, el = $('qTimer');
+  el.classList.remove('warn');
+  el.textContent = `⏱ ${s}s`;
+  qz.tmr = setInterval(() => {
+    s--;
+    el.textContent = `⏱ ${s}s`;
+    if (s <= 10) el.classList.add('warn');
+    if (s <= 0) { clearInterval(qz.tmr); pick(null); }
+  }, 1000);
+}
+
+function pick(chosen) {
+  clearInterval(qz.tmr);
+  const q = qz.qs[qz.cur], cor = q.correct;
+  const ok = chosen === cor;
+  if (ok) qz.score++;
+  qz.ans.push({ chosen, cor, ok });
+
+  document.querySelectorAll('.opt-btn').forEach(b => b.disabled = true);
+  if (chosen) document.getElementById('o'+chosen)?.classList.add(ok ? 'correct' : 'wrong');
+  if (!ok) document.getElementById('o'+cor)?.classList.add('correct');
+
+  const ex = $('exBox');
+  ex.style.display = 'block';
+  ex.innerHTML = `<b>${ok ? '✅ ถูกต้อง!' : chosen ? '❌ ผิด' : '⏰ หมดเวลา'}</b>  ${q.explanation || ''}`;
+
+  const nb = $('btnNext');
+  nb.style.display = 'block';
+  nb.textContent = qz.cur < qz.qs.length-1 ? 'ถัดไป →' : '📊 ดูผลคะแนน';
+  nb.onclick = () => {
+    if (qz.cur < qz.qs.length-1) { qz.cur++; showQ(qz.cur); } else showResults();
+  };
+}
+
+async function showResults() {
+  clearInterval(qz.tmr);
+  $('quizScreen').style.display = 'none';
+  $('quizResults').style.display = 'block';
+
+  const s = qz.score, t = qz.qs.length;
+  const pct = Math.round((s/t)*100);
+  const xp = s*5 + (s===t ? 30 : s>=7 ? 20 : 0);
+
+  $('resN').textContent = s;
+  $('resD').textContent = '/'+t;
+  $('scoreRing').style.setProperty('--pct', pct);
+  $('resXP').textContent = '+'+xp+' XP';
+  $('resGrade').textContent = s>=9?'🌟 ยอดเยี่ยมมาก!':s>=7?'👏 เก่งมาก!':s>=5?'😊 พอใช้ได้':'💪 สู้ต่อไป!';
+  $('resBadge').innerHTML = '';
+  $('reviewList').innerHTML = '';
+
+  const res = await api('submitQuiz', { category: qz.cat, score: s, total: t, xpEarned: xp });
+  if (res.status === 'ok') {
+    stats = res.data;
+    renderProfile();
+    if (res.newBadge) $('resBadge').innerHTML = `<div style="background:rgba(255,215,0,.1);border:1px solid rgba(255,215,0,.4);border-radius:10px;padding:8px 12px;font-size:.8rem;color:var(--warning)">🏅 ได้รับ Badge ใหม่: <b>${res.newBadge}</b></div>`;
+  }
+}
+
+$('btnReview').addEventListener('click', () => {
+  const rl = $('reviewList');
+  if (rl.innerHTML) { rl.innerHTML = ''; return; }
+  rl.innerHTML = qz.qs.map((q,i) => {
+    const a = qz.ans[i] || {};
+    return `<div class="rv-card">
+      <div style="font-weight:700;margin-bottom:5px">${i+1}. ${q.question}</div>
+      <div style="color:${a.ok?'var(--success)':'var(--danger)'}">
+        ${a.ok?'✅':'❌'} เฉลย: ${q['opt'+q.correct]} (${q.correct})
+        ${!a.ok && a.chosen ? `<span style="color:var(--txt-s)"> · ตอบ: ${q['opt'+a.chosen]}</span>` : ''}
+      </div>
+      <div style="color:var(--txt-s);margin-top:5px;font-size:.78rem">💡 ${q.explanation||'-'}</div>
+    </div>`;
+  }).join('');
+});
+
+$('btnRetry').addEventListener('click', () => startQuiz(qz.cat));
+$('btnBackCat').addEventListener('click', () => {
+  $('quizScreen').style.display = 'none';
+  $('quizResults').style.display = 'none';
+  $('qzCats').style.display = 'block';
+  renderCategories();
+});
+
+/* ══════════════════════════════════════
+   BADGES
+══════════════════════════════════════ */
+function renderBadgeGrid() {
+  const earned = parseJSON(stats?.badges, []);
+  $('bdgEarned').textContent = earned.length;
+  $('bdgTotal').textContent = BADGE_DEFS.length;
+  $('badgeGrid').innerHTML = BADGE_DEFS.map(b => {
+    const has = earned.includes(b.id);
+    return `<div class="bdg ${has?'earned':'locked'}">
+      <span class="be">${b.em}</span>
+      <div class="bn">${b.name}</div>
+      <div class="bd">${b.desc}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════
+   LEADERBOARD
+══════════════════════════════════════ */
+async function loadLeaderboard() {
+  const res = await api('getLeaderboard');
+  if (res.status !== 'ok') return;
+  const medals = ['🥇','🥈','🥉'];
+  $('rankList').innerHTML = (res.data||[]).map((u,i) => {
+    const me = u.userId === profile?.userId;
+    const rc = i===0?'g':i===1?'s':i===2?'b':'';
+    return `<div class="rank-item ${me?'me':''}">
+      <div class="rn ${rc}">${i<3?medals[i]:i+1}</div>
+      <div class="rav"><img src="${u.pictureUrl||'https://placehold.co/36x36/7C6FF7/fff?text=?'}" alt=""></div>
+      <div class="ri">
+        <div class="ri-name">${u.displayName}${me?' 👈':''}</div>
+        <div class="ri-sub">${getLevel(+u.totalScore||0).lbl} · ${u.quizzesDone||0} Quiz</div>
+      </div>
+      <div class="rs">${(+u.totalScore||0).toLocaleString()} XP</div>
+    </div>`;
+  }).join('') || '<div style="text-align:center;color:var(--txt-s);padding:16px;font-size:.82rem">ยังไม่มีข้อมูล</div>';
+}
+
+/* ══════════════════════════════════════
+   RADAR CHART
+══════════════════════════════════════ */
+function renderRadar() {
+  const ctx = document.getElementById('radarChart').getContext('2d');
+  const best = parseJSON(stats?.categoryBest, {});
+  if (radarChart) radarChart.destroy();
+  radarChart = new Chart(ctx, {
+    type: 'radar',
+    data: {
+      labels: CATS.map(c => c.name),
+      datasets: [{
+        label: 'คะแนนสูงสุด (/10)',
+        data: CATS.map(c => best[c.id] || 0),
+        borderColor: '#7C6FF7', borderWidth: 2,
+        backgroundColor: 'rgba(124,111,247,.18)',
+        pointBackgroundColor: '#00D4FF', pointRadius: 4,
+      }]
+    },
+    options: {
+      scales: { r: {
+        min: 0, max: 10,
+        ticks: { display: false, stepSize: 2 },
+        grid: { color: 'rgba(255,255,255,.08)' },
+        angleLines: { color: 'rgba(255,255,255,.08)' },
+        pointLabels: { color: '#9898c0', font: { family: 'IBM Plex Sans Thai', size: 10 } }
+      }},
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+/* ══════════════════════════════════════
+   TAB SWITCH
+══════════════════════════════════════ */
+function goTab(tab, el) {
+  document.querySelectorAll('.tp').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.ni').forEach(n => n.classList.remove('active'));
+  document.getElementById('tp-'+tab).classList.add('active');
+  el.classList.add('active');
+  if (tab === 'rank')   loadLeaderboard();
+  if (tab === 'badges') renderBadgeGrid();
+  if (tab === 'quiz') {
+    $('qzCats').style.display = 'block';
+    $('quizScreen').style.display = 'none';
+    $('quizResults').style.display = 'none';
+    renderCategories();
+  }
+}
+
+/* ══════════════════════════════════════
+   UTILS
+══════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const shuffle = a => [...a].sort(() => Math.random()-.5);
+const parseJSON = (v, d) => { try { return typeof v === 'string' ? JSON.parse(v) : (v || d); } catch { return d; } };
+
+init();
+</script>
+</body>
+</html>
