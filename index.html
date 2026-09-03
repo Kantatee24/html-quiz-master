@@ -658,31 +658,11 @@ function jsonp(url) {
   });
 }
 
-function apiPost(body) {
-  return new Promise(resolve => {
-    const xhr = new XMLHttpRequest();
-    xhr.onreadystatechange = function() {
-      if (xhr.readyState !== 4) return;
-      try { resolve(JSON.parse(xhr.responseText)); }
-      catch(e) { resolve({ status:'error', message: xhr.responseText.substring(0,100) }); }
-    };
-    xhr.onerror = () => resolve({ status:'error', message:'POST network error' });
-    xhr.timeout = 15000;
-    xhr.ontimeout = () => resolve({ status:'error', message:'POST timeout' });
-    xhr.open('POST', API_URL, true);
-    xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
-    xhr.send(JSON.stringify(body));
-  });
-}
-
 async function api(action, extra = {}) {
   try {
-    const isGet = ['getUserStats','getLeaderboard','getQuestions'].includes(action);
-    if (isGet) {
-      const p = new URLSearchParams({ action, userId: profile?.userId || '', ...extra });
-      return await jsonp(API_URL + '?' + p);
-    }
-    return await apiPost({ action, userId: profile.userId, displayName: profile.displayName, pictureUrl: profile.pictureUrl || '', ...extra });
+    const base = { action, userId: profile?.userId || '', displayName: profile?.displayName || '', pictureUrl: profile?.pictureUrl || '' };
+    const p = new URLSearchParams({ ...base, ...extra });
+    return await jsonp(API_URL + '?' + p);
   } catch(e) {
     return { status:'error', message: e.message };
   }
