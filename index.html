@@ -354,7 +354,7 @@ body {
 <div id="loading">
   <div class="ld-icon">📚</div>
   <div class="ld-title">HTML Quiz Master</div>
-  <div class="ld-sub">กำลังเชื่อมต่อ LINE... ✨</div>
+  <div class="ld-sub" id="ldSub">กำลังโหลด LIFF SDK...</div>
   <div class="ld-bar"><div class="ld-fill"></div></div>
 </div>
 
@@ -582,11 +582,18 @@ let qz = { cat:'', qs:[], cur:0, ans:[], score:0, tmr:null };
 ══════════════════════════════════════ */
 async function init() {
   try {
+    $('ldSub').textContent = 'กำลัง init LIFF...';
     await liff.init({ liffId: LIFF_ID });
-    if (!liff.isLoggedIn()) { liff.login(); return; }
+    $('ldSub').textContent = 'LIFF init สำเร็จ — ตรวจสอบ login...';
+    if (!liff.isLoggedIn()) {
+      $('ldSub').textContent = 'กำลัง redirect ไป LINE login...';
+      liff.login(); return;
+    }
+    $('ldSub').textContent = 'กำลังโหลด profile...';
     profile = await liff.getProfile();
     $('pfPic').src = profile.pictureUrl || '';
     $('pfName').textContent = profile.displayName;
+    $('ldSub').textContent = 'กำลังโหลดข้อมูลผู้ใช้...';
 
     const res = await api('getUserStats');
     if (res.status === 'ok') {
