@@ -540,6 +540,13 @@ body {
 
 <script>
 /* ══════════════════════════════════════
+   UTILS (ต้องอยู่บนสุดก่อนใช้งาน)
+══════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const shuffle = a => [...a].sort(() => Math.random()-.5);
+const parseJSON = (v, d) => { try { return typeof v === 'string' ? JSON.parse(v) : (v || d); } catch { return d; } };
+
+/* ══════════════════════════════════════
    CONFIG — เติม 2 จุดนี้
 ══════════════════════════════════════ */
 const LIFF_ID = '2011299671-DAY74nv0';
@@ -982,10 +989,6 @@ function goTab(tab, el) {
 /* ══════════════════════════════════════
    UTILS
 ══════════════════════════════════════ */
-const $ = id => document.getElementById(id);
-const shuffle = a => [...a].sort(() => Math.random()-.5);
-const parseJSON = (v, d) => { try { return typeof v === 'string' ? JSON.parse(v) : (v || d); } catch { return d; } };
-
 window.onerror = (msg, src, line) => {
   document.getElementById('ldSub').textContent = '❌ JS Error: ' + msg + ' (line ' + line + ')';
 };
