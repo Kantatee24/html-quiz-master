@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LIFF Test</title>
+</head>
+<body style="font-family:sans-serif;padding:20px;background:#1a1a2e;color:#fff;">
+<h2 id="msg">⏳ กำลังโหลด...</h2>
+<pre id="log" style="font-size:12px;color:#aaa;margin-top:16px;white-space:pre-wrap"></pre>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script>
+const LIFF_ID = '2011299671-DAY74nv0';
+const log = t => { document.getElementById('log').textContent += t + '\n'; };
+
+window.onerror = (msg, src, line) => {
+  document.getElementById('msg').textContent = '❌ JS Error';
+  log('Error: ' + msg + ' line:' + line);
+};
+
+window.addEventListener('load', async () => {
+  log('✅ Scripts loaded');
+  try {
+    log('🔄 liff.init...');
+    await liff.init({ liffId: LIFF_ID });
+    log('✅ liff.init OK');
+    log('isLoggedIn: ' + liff.isLoggedIn());
+    if (!liff.isLoggedIn()) {
+      log('🔄 Redirecting to login...');
+      liff.login();
+      return;
+    }
+    const p = await liff.getProfile();
+    log('✅ Profile: ' + p.displayName);
+    document.getElementById('msg').textContent = '✅ LIFF ทำงานได้! สวัสดี ' + p.displayName;
+  } catch(e) {
+    document.getElementById('msg').textContent = '❌ Error';
+    log('LIFF Error: ' + e.message);
+  }
+});
+</script>
+</body>
+</html>
