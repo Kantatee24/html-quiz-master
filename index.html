@@ -363,7 +363,7 @@ body {
 <!-- LOADING -->
 <div id="loading">
   <div class="ld-icon">📚</div>
-  <div class="ld-title">HTML Quiz Master</div>
+  <div class="ld-title">HTML Quiz Master <small style="font-size:.5em;opacity:.5">v4</small></div>
   <div class="ld-sub" id="ldSub">กำลังโหลด LIFF SDK...</div>
   <div class="ld-bar"><div class="ld-fill"></div></div>
 </div>
@@ -598,34 +598,34 @@ let qz = { cat:'', qs:[], cur:0, ans:[], score:0, tmr:null };
    INIT
 ══════════════════════════════════════ */
 async function init() {
+  let step = '?';
   try {
+    step = 'liff.init';
     $('ldSub').textContent = 'กำลัง init LIFF...';
     await liff.init({ liffId: LIFF_ID });
-    $('ldSub').textContent = 'LIFF init สำเร็จ — ตรวจสอบ login...';
-    if (!liff.isLoggedIn()) {
-      $('ldSub').textContent = 'กำลัง redirect ไป LINE login...';
-      liff.login(); return;
-    }
+    step = 'login-check';
+    if (!liff.isLoggedIn()) { liff.login(); return; }
+    step = 'getProfile';
     $('ldSub').textContent = 'กำลังโหลด profile...';
     profile = await liff.getProfile();
     $('pfPic').src = profile.pictureUrl || '';
     $('pfName').textContent = profile.displayName;
-    $('ldSub').textContent = 'กำลังโหลดข้อมูลผู้ใช้...';
-
+    step = 'getUserStats';
     $('ldSub').textContent = 'กำลังเชื่อมต่อ API...';
     const res = await api('getUserStats');
     if (res.status === 'ok') {
       stats = res.data;
     } else {
+      step = 'createUser';
       $('ldSub').textContent = 'สร้างบัญชีผู้ใช้ใหม่...';
       const cr = await api('createUser');
       if (cr.status === 'ok') {
         stats = cr.data;
       } else {
-        throw new Error('API Error: ' + (cr.message || 'ไม่สามารถเชื่อมต่อได้'));
+        throw new Error('[' + step + '] ' + (cr.message || JSON.stringify(cr)));
       }
     }
-
+    step = 'render';
     renderProfile();
     renderCategories();
     renderBadgeGrid();
@@ -633,11 +633,12 @@ async function init() {
     renderMissions();
     loadLeaderboard();
     renderRadar();
-
     $('loading').style.display = 'none';
     $('app').style.display = 'block';
   } catch (e) {
-    $('loading').innerHTML = `<div class="ld-icon">😿</div><div class="ld-title" style="-webkit-text-fill-color:#FF5252">เชื่อมต่อไม่ได้</div><div class="ld-sub">${e.message}</div>`;
+    $('loading').innerHTML = `<div class="ld-icon">😿</div>
+      <div class="ld-title" style="-webkit-text-fill-color:#FF5252">Error at: ${step}</div>
+      <div class="ld-sub" style="word-break:break-all;padding:0 16px">${e.message}</div>`;
   }
 }
 
