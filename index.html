@@ -979,7 +979,11 @@ const $ = id => document.getElementById(id);
 const shuffle = a => [...a].sort(() => Math.random()-.5);
 const parseJSON = (v, d) => { try { return typeof v === 'string' ? JSON.parse(v) : (v || d); } catch { return d; } };
 
-init();
+window.onerror = (msg, src, line) => {
+  document.getElementById('ldSub').textContent = '❌ JS Error: ' + msg + ' (line ' + line + ')';
+};
+
+window.addEventListener('load', init);
 </script>
 </body>
 </html>
