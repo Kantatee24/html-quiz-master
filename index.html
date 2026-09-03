@@ -646,27 +646,31 @@ window.addEventListener('pagehide', () => { try { if (liff.isLoggedIn()) liff.lo
 /* ══════════════════════════════════════
    API
 ══════════════════════════════════════ */
-async function api(action, extra = {}) {
-  try {
+function api(action, extra = {}) {
+  return new Promise(resolve => {
     const isGet = ['getUserStats','getLeaderboard','getQuestions'].includes(action);
+    const xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState !== 4) return;
+      try {
+        resolve(JSON.parse(xhr.responseText));
+      } catch(e) {
+        resolve({ status:'error', message: e.message + ' | response: ' + xhr.responseText.substring(0,100) });
+      }
+    };
+    xhr.onerror = () => resolve({ status:'error', message:'XHR network error' });
+    xhr.ontimeout = () => resolve({ status:'error', message:'XHR timeout' });
+    xhr.timeout = 15000;
     if (isGet) {
       const p = new URLSearchParams({ action, userId: profile?.userId || '', ...extra });
-      const r = await fetch(`${API_URL}?${p}`, { redirect: 'follow' });
-      const text = await r.text();
-      return JSON.parse(text);
+      xhr.open('GET', API_URL + '?' + p, true);
+      xhr.send();
+    } else {
+      xhr.open('POST', API_URL, true);
+      xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
+      xhr.send(JSON.stringify({ action, userId: profile.userId, displayName: profile.displayName, pictureUrl: profile.pictureUrl || '', ...extra }));
     }
-    const r = await fetch(API_URL, {
-      method: 'POST',
-      redirect: 'follow',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action, userId: profile.userId, displayName: profile.displayName, pictureUrl: profile.pictureUrl || '', ...extra })
-    });
-    const text = await r.text();
-    return JSON.parse(text);
-  } catch (e) {
-    console.error('API Error:', e);
-    return { status: 'error', message: e.message };
-  }
+  });
 }
 
 /* ══════════════════════════════════════
