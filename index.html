@@ -553,7 +553,7 @@ const parseJSON = (v, d) => { try { return typeof v === 'string' ? JSON.parse(v)
    CONFIG — เติม 2 จุดนี้
 ══════════════════════════════════════ */
 const LIFF_ID = '2011299671-DAY74nv0';
-const API_URL = 'https://script.google.com/macros/s/AKfycbwsJpfKmZFsrqYkM3wmUDWk2U9WKJO22v0oa4gUgMBqqgAPZnqqrPgxP58OZcYKfwrvCQ/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzGXF_QqKrjlXlNLNgP2n4wNPWbyv4nedx0KRCauqvhSnInxVOy9EyuytG2pgo9xUkMPQ/exec';
 
 /* ══════════════════════════════════════
    CONSTANTS
@@ -646,31 +646,46 @@ window.addEventListener('pagehide', () => { try { if (liff.isLoggedIn()) liff.lo
 /* ══════════════════════════════════════
    API
 ══════════════════════════════════════ */
-function api(action, extra = {}) {
+function jsonp(url) {
+  return new Promise((resolve, reject) => {
+    const cb = 'cb_' + Date.now();
+    const s = document.createElement('script');
+    const timer = setTimeout(() => { reject(new Error('JSONP timeout')); s.remove(); delete window[cb]; }, 15000);
+    window[cb] = data => { clearTimeout(timer); resolve(data); s.remove(); delete window[cb]; };
+    s.onerror = () => { clearTimeout(timer); reject(new Error('JSONP load error')); delete window[cb]; };
+    s.src = url + '&callback=' + cb;
+    document.head.appendChild(s);
+  });
+}
+
+function apiPost(body) {
   return new Promise(resolve => {
-    const isGet = ['getUserStats','getLeaderboard','getQuestions'].includes(action);
     const xhr = new XMLHttpRequest();
     xhr.onreadystatechange = function() {
       if (xhr.readyState !== 4) return;
-      try {
-        resolve(JSON.parse(xhr.responseText));
-      } catch(e) {
-        resolve({ status:'error', message: e.message + ' | response: ' + xhr.responseText.substring(0,100) });
-      }
+      try { resolve(JSON.parse(xhr.responseText)); }
+      catch(e) { resolve({ status:'error', message: xhr.responseText.substring(0,100) }); }
     };
-    xhr.onerror = () => resolve({ status:'error', message:'XHR network error' });
-    xhr.ontimeout = () => resolve({ status:'error', message:'XHR timeout' });
+    xhr.onerror = () => resolve({ status:'error', message:'POST network error' });
     xhr.timeout = 15000;
+    xhr.ontimeout = () => resolve({ status:'error', message:'POST timeout' });
+    xhr.open('POST', API_URL, true);
+    xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
+    xhr.send(JSON.stringify(body));
+  });
+}
+
+async function api(action, extra = {}) {
+  try {
+    const isGet = ['getUserStats','getLeaderboard','getQuestions'].includes(action);
     if (isGet) {
       const p = new URLSearchParams({ action, userId: profile?.userId || '', ...extra });
-      xhr.open('GET', API_URL + '?' + p, true);
-      xhr.send();
-    } else {
-      xhr.open('POST', API_URL, true);
-      xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
-      xhr.send(JSON.stringify({ action, userId: profile.userId, displayName: profile.displayName, pictureUrl: profile.pictureUrl || '', ...extra }));
+      return await jsonp(API_URL + '?' + p);
     }
-  });
+    return await apiPost({ action, userId: profile.userId, displayName: profile.displayName, pictureUrl: profile.pictureUrl || '', ...extra });
+  } catch(e) {
+    return { status:'error', message: e.message };
+  }
 }
 
 /* ══════════════════════════════════════
